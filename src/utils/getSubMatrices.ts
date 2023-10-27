@@ -1,5 +1,7 @@
 import { type EigenvalueDecomposition, Matrix } from 'ml-matrix';
 
+import { getIndicesAndRootOfEigenValues } from './getIndicesAndRootOfEigenValues';
+
 interface GetSubMatrices {
   /**
    * The matrix B EV-decomposed
@@ -9,58 +11,51 @@ interface GetSubMatrices {
    * The number of dimensions they want
    */
   dimensions: number;
-  /**
-   * The number of data points
-   */
-  dataLength: number;
-}
-
-export function getSubMatrices({
-  decomposedB,
-  dimensions,
-  dataLength,
-}: GetSubMatrices) {
-  // determine the m largest eigenvalues of B
-  const { diagonalMatrix, eigenvectorMatrix } = decomposedB;
-
-  // diagonal matrix is mutated to sqrt of eigenvalues
-  const indices = getIndices({ diagonalMatrix, dataLength, dimensions });
-  const Em = eigenvectorMatrix.subMatrixColumn(indices);
-
-  const rootOfDiagonal = diagonalMatrix.subMatrixColumn(indices);
-  for (let i = 0; i < dimensions; i++) {
-    rootOfDiagonal.set(i, i, Math.sqrt(rootOfDiagonal.get(i, i)));
-  }
-  return { Em, rootOfDiagonal };
 }
 
 /**
- * Mutates Diagonal Matrix, returns useful column indices.
+ * Get the sub-matrices of:
+ * 1. EigenVectors or `Em`
+ * 2. EigenValues (square root) or `LRoot`.
  * @param param0
  * @returns
  */
-function getIndices({
-  diagonalMatrix,
-  dataLength,
+export function getSubMatrices({
+  decomposedB,
   dimensions,
-}: {
-  diagonalMatrix: Matrix;
-  dataLength: number;
-  dimensions: number;
-}) {
-  // sort in descending order
-  const eigenValues: { value: number; index: number }[] = [];
-  for (let i = 0; i < dataLength; i++) {
-    const element = diagonalMatrix.get(i, i);
-    diagonalMatrix.set(i, i, Math.sqrt(element));
-    eigenValues.push({
-      value: element,
-      index: i,
-    });
-  }
-  const mValues = eigenValues
-    .sort((a, b) => b.value - a.value)
-    .slice(0, dimensions);
+}: GetSubMatrices): Out {
+  // determine the m largest eigenvalues of B
+  const { realEigenvalues, eigenvectorMatrix } = decomposedB;
 
-  return mValues.map((v) => v.index);
+  // avoid using matrix, and get sqrt in a simple way.
+  const { mEigenValues, mIndices } = getIndicesAndRootOfEigenValues({
+    realEigenvalues,
+    dimensions,
+  });
+
+  // this happens if all the EVs were negative.
+  if (dimensions === 0) {
+    throw new Error(
+      'All the eigenvalues are negative. Cannot perform MDS in this case.',
+    );
+  }
+  // it also takes care of the order of the columns
+  const Em = eigenvectorMatrix.subMatrixColumn(mIndices);
+  const LRoot = Matrix.diag(mEigenValues);
+
+  return {
+    Em,
+    LRoot,
+  };
+}
+
+interface Out {
+  /**
+   * The sub-matrix of eigenvectors
+   */
+  Em: Matrix;
+  /**
+   * The sub-matrix of eigenvalues
+   */
+  LRoot: Matrix;
 }

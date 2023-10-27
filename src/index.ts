@@ -1,47 +1,50 @@
-import { EigenvalueDecomposition, Matrix } from 'ml-matrix';
+import { Matrix } from 'ml-matrix';
 
-import {
-  doubleCenterMatrix,
-  getDissimilaritySquared,
-  getSubMatrices,
-} from './utils/';
+import { strain } from './loss';
+import { mds, MDSOptions } from './mds';
+import { scaleDown, scaleUp, normalize } from './scaling';
 
 /**
- * Performs classic multidimensional scaling.
- * In this software D is the Squared Proximity Matrix.
- * C is the Centering Matrix.
- * @returns The matrix X, or Coordinates Matrix.
+ * Performs the calculation on instantiation (no need of `fit`)
+ * Standard properties are returned (access using dot notation.)
+ *
+ * The fit minimizes the Strain Loss (least squares minimize SSE loss.)
  */
-export function mds(
-  data: number[][],
-  dimensions: number,
-  options: {
-    /**
-     * If true, calculate the dissimilarity matrix from the data, otherwise
-     * assume the data is already a dissimilarity matrix, and square it.
-     */
-    calculateDissimilarity?: boolean;
-  } = {},
-) {
-  const dataLength = data.length;
+export class MultidimensionalScaling {
+  data: Matrix;
+  dimensions: number;
+  options: MDSOptions;
+  coordinatesMatrix: Matrix;
+  symmetricMatrixB: Matrix;
+  /**
+   * Classic Multidimensional Scaling.
+   * @param data - Either the data matrix or the dissimilarity matrix.
+   * @param dimensions - The number of dimensions to output (max).
+   * @param options - See {@link MDSOptions}.
+   * @returns Multidimensional Scaling -  for type info see {@link MultidimensionalScaling}
+   */
+  constructor(
+    data: number[][] | Matrix,
+    dimensions: number,
+    options: MDSOptions = {},
+  ) {
+    this.data = Matrix.checkMatrix(data);
+    this.options = options;
 
-  // step 1: calculate the squared of the dissimilarity matrix D
-  const D2: Matrix = options.calculateDissimilarity
-    ? getDissimilaritySquared(data)
-    : new Matrix(data).pow(2);
+    if (dimensions > this.data.columns) {
+      throw new Error(
+        'Cannot have more dimensions than the number of columns in the data.',
+      );
+    }
 
-  // step 2: Apply double centering to D
-  const B = doubleCenterMatrix(D2, dataLength);
+    const { X, B, availableDimensions } = mds(this.data, dimensions, options);
 
-  const decomposedB = new EigenvalueDecomposition(B);
-
-  // step 3: Determine the m (dimensions) largest eigenvalues of B
-  const { Em, rootOfDiagonal } = getSubMatrices({
-    decomposedB,
-    dataLength,
-    dimensions,
-  });
-
-  // step 4: Calculate the coordinates, X
-  return Em.mmul(rootOfDiagonal);
+    this.dimensions = availableDimensions;
+    this.coordinatesMatrix = X;
+    this.symmetricMatrixB = B;
+  }
+  strain = strain;
+  scaleDown = scaleDown;
+  scaleUp = scaleUp;
+  normalize = normalize;
 }

@@ -1,25 +1,27 @@
 import { Matrix } from 'ml-matrix';
 
-import { distance } from 'ml-distance';
 /**
- * Distance between vectors. We make use of symmetry.
- * @param data
- * @returns
+ * Distance between vectors. Make use of symmetry.
+ * @param data - the data as an array of arrays
+ * @returns - the dissimilarity matrix squared i.e D2
  */
-export function getDissimilaritySquared(data: number[][]) {
-  const dataLength = data.length;
-  //
-  const D: Matrix = new Matrix(dataLength, dataLength);
-  for (let i = 0; i < dataLength; i++) {
+export function getDissimilaritySquared(data: Matrix) {
+  const n = data.rows; // dataLength or number of samples.
+
+  // we do not mutate the data
+  const D2: Matrix = new Matrix(n, n);
+  for (let i = 0; i < n; i++) {
     //row
-    const reference = data[i];
-    for (let j = i + 1; j < data.length; j++) {
-      //column
-      const d = distance.squaredEuclidean(reference, data[j]);
-      D.set(i, j, d);
-      D.set(j, i, d);
+    const currentRow = data.getRowVector(i);
+    for (let j = i + 1; j < n; j++) {
+      let total = 0;
+      for (let k = 0; k < n; k++) {
+        total += Math.pow(currentRow.get(0, k) - data.get(j, k), 2);
+      }
+      D2.set(i, j, total);
+      D2.set(j, i, total);
     }
-    D.set(i, i, 0);
+    D2.set(i, i, 0);
   }
-  return D;
+  return D2;
 }
